@@ -1,0 +1,4 @@
+# Must match the README's top heading so the theme doesn't add a second title.
+title: Blogs
+description: Long-form technical writing on ML systems and LLM inference, worked out from first principles.
+lang: en
