@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Evolving Search Ranking: From XGBoost to Multi-Task Deep Learning with Knowledge Distillation</title>
+<meta name="description" content="How Meesho's L1 search ranker moved from two XGBoost models to a single multi-task deep learning model with CGC experts, entire-space CTR/CTCVR training and knowledge distillation from a BERT cross-encoder.">
+<meta property="og:title" content="Evolving Search Ranking: From XGBoost to Multi-Task Deep Learning">
+<meta property="og:description" content="Replacing two XGBoost models with one multi-task network that learns clicks and purchases together, distilled from a BERT cross-encoder for relevance.">
+<meta property="og:type" content="article">
+<link rel="canonical" href="https://www.meesho.io/blog/evolving-search-ranking-from-xgboost-to-multi-task-deep-learning-with-knowledge-distillation">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔎</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page: #FFFFFF;
+  --paper: #F6F7F9;
+  --surface: #FFFFFF;
+  --ink: #1B1F27;
+  --muted: #5B6472;
+  --rule: #DCE0E6;
+  --accent: #2F5FA6;
+  --accent-soft: #DDE7F6;
+  --warm: #C0591A;
+  --warm-soft: #FBE7D8;
+  --formula-bg: #EEF3FB;
+  --fig-bg: #FFFFFF;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", Menlo, Consolas, monospace;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #14171C; --paper: #14171C; --surface: #1C2027; --ink: #E7EAEF; --muted: #A2AAB6; --rule: #2F3540;
+    --accent: #7FA8EA; --accent-soft: #1D2B40; --warm: #F08A45; --warm-soft: #3A2718;
+    --formula-bg: #1E2633; --fig-bg: #FFFFFF;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #14171C; --paper: #14171C; --surface: #1C2027; --ink: #E7EAEF; --muted: #A2AAB6; --rule: #2F3540;
+  --accent: #7FA8EA; --accent-soft: #1D2B40; --warm: #F08A45; --warm-soft: #3A2718;
+  --formula-bg: #1E2633; --fig-bg: #FFFFFF;
+}
+*, *::before, *::after { box-sizing: inherit; }
+html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 64px); scroll-behavior: smooth; background: var(--page); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--serif); font-size: 19px; line-height: 1.68; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); }
+a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- nav ---------- */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule); }
+.nav-inner { max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 22px; padding: 12px 24px; font-family: var(--sans); font-size: 14.5px; overflow-x: auto; scrollbar-width: none; }
+.nav-inner::-webkit-scrollbar { display: none; }
+.nav-title { font-weight: 700; white-space: nowrap; margin-right: auto; color: var(--ink); text-decoration: none; }
+.nav-inner a:not(.nav-title) { color: var(--muted); text-decoration: none; white-space: nowrap; }
+.nav-inner a:not(.nav-title):hover { color: var(--ink); }
+
+/* ---------- layout ---------- */
+.wrap { max-width: 780px; margin: 0 auto; padding: 0 24px; }
+.wide { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+section { padding: 72px 0 24px; }
+section + section { border-top: 1px solid var(--rule); }
+
+h1, h2, h3, h4 { font-family: var(--sans); color: var(--ink); letter-spacing: -0.015em; }
+h1 { font-size: clamp(36px, 6vw, 58px); line-height: 1.05; font-weight: 700; margin: 12px 0 20px; letter-spacing: -0.03em; }
+h2 { font-size: clamp(28px, 4.2vw, 38px); line-height: 1.12; font-weight: 700; margin: 6px 0 20px; }
+h3 { font-size: 22px; line-height: 1.3; font-weight: 600; margin: 40px 0 10px; }
+p { margin: 0 0 18px; }
+ul, ol { margin: 0 0 20px; padding-left: 24px; }
+li { margin: 0 0 8px; }
+strong { font-weight: 600; }
+.num { color: var(--muted); font-weight: 600; margin-right: 10px; }
+
+.eyebrow { font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--muted); }
+.dek { font-family: var(--sans); font-size: 21px; line-height: 1.5; color: var(--muted); max-width: 680px; }
+
+/* ---------- hero ---------- */
+.hero { padding: 64px 0 48px; }
+.back { font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--muted); text-decoration: none; display: inline-block; margin-bottom: 28px; }
+.back:hover { color: var(--ink); }
+.meta { font-family: var(--sans); font-size: 15px; color: var(--muted); margin: 28px 0 0; padding-top: 20px; border-top: 1px solid var(--rule); display: grid; gap: 14px; }
+.authors { color: var(--ink); line-height: 1.6; }
+.authors span { color: var(--muted); }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag { font-family: var(--sans); font-weight: 600; font-size: 13.5px; padding: 3px 11px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.origin { font-size: 14.5px; }
+
+/* ---------- contents ---------- */
+.contents { font-family: var(--sans); font-size: 16.5px; line-height: 1.5; counter-reset: c; list-style: none; padding: 0; margin: 8px 0 0; }
+.contents li { counter-increment: c; display: grid; grid-template-columns: 34px 1fr; padding: 11px 0; border-top: 1px solid var(--rule); margin: 0; }
+.contents li::before { content: counter(c); color: var(--muted); font-weight: 600; }
+.contents a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.contents a:hover { text-decoration: underline; }
+.contents span { display: block; color: var(--muted); font-size: 15px; font-weight: 400; }
+
+/* ---------- figures ---------- */
+figure { margin: 32px 0; }
+figure img { display: block; width: 100%; height: auto; background: var(--fig-bg); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+figcaption { font-family: var(--sans); font-size: 14.5px; color: var(--muted); margin: 10px auto 0; line-height: 1.5; text-align: center; max-width: 720px; }
+figcaption strong { color: var(--ink); }
+.fig-narrow { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+/* side-by-side ranked feeds */
+.compares { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+.compare { margin: 28px 0 48px; }
+.query-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; font-family: var(--sans); font-size: 16px; }
+.query-bar div { display: flex; align-items: baseline; gap: 8px; }
+.query-bar dt { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.query-bar dd { margin: 0; color: var(--ink); }
+.query-bar .q { font-family: var(--mono); font-weight: 500; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 560px) { .pair { gap: 10px; } .compares { padding: 0 16px; } }
+.pair figure { margin: 0; }
+.pair img { padding: 0; }
+.model { display: inline-block; font-family: var(--sans); font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; margin-bottom: 8px; background: var(--paper); color: var(--muted); border: 1px solid var(--rule); }
+.after .model { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ---------- callouts ---------- */
+.formula { background: var(--formula-bg); border-radius: 10px; padding: 18px 22px; margin: 6px 0 22px; font-family: var(--mono); font-size: 17px; line-height: 1.6; overflow-x: auto; }
+.formula sub { font-size: 0.72em; }
+.defs { font-family: var(--sans); font-size: 16.5px; line-height: 1.55; }
+.defs li { margin-bottom: 6px; }
+.defs code { font-family: var(--mono); font-size: 0.92em; }
+.flow { font-family: var(--sans); font-weight: 600; font-style: normal; }
+
+.refs { font-family: var(--sans); font-size: 16.5px; }
+footer { border-top: 1px solid var(--rule); padding: 36px 0 64px; font-family: var(--sans); font-size: 15px; color: var(--muted); }
+footer a { font-weight: 600; }
+
+@media (max-width: 560px) {
+  body { font-size: 17.5px; }
+  .wrap, .wide, .nav-inner { padding-left: 16px; padding-right: 16px; }
+  section { padding-top: 56px; }
+  figure img { padding: 6px; }
+}
+.article h2 { margin-top: 64px; }
+#contents .contents li { grid-template-columns: 1fr; }
+#contents .contents li::before { content: none; }
+.article .wrap > h2:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Sections">
+  <div class="nav-inner">
+    <a class="nav-title" href="#top">Evolving Search Ranking</a>
+    <a href="#search-at-meesho">Search</a>
+    <a href="#2-background-two-model-xgboost-approach">Background</a>
+    <a href="#3-multi-task-learning-in-ranking">Multi-task model</a>
+    <a href="#34-knowledge-distillation">Distillation</a>
+    <a href="#4-model-training">Training</a>
+    <a href="#5-offline-and-online-results">Results</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <a class="back" href="../">← All posts</a>
+    <h1>Evolving Search Ranking: From XGBoost to Multi-Task Deep Learning with Knowledge Distillation</h1>
+    <div class="meta">
+      <div class="authors">Written By Hardik Gupta (ex-Meesho), Srinivasa Rao Jami (Senior Manager - Data Science), Sameer Sharma (Data Scientist), Prashant Kumar (Data Scientist)</div>
+      <div>5 August 2025 · 9 min read</div>
+      <div class="tags">
+        <span class="tag">Search Ranking</span>
+        <span class="tag">Multi-Task Learning</span>
+        <span class="tag">Knowledge Distillation</span>
+        <span class="tag">Learning to Rank</span>
+        <span class="tag">E-commerce</span>
+      </div>
+      <div class="origin">Originally published on the <a href="https://www.meesho.io/blog/evolving-search-ranking-from-xgboost-to-multi-task-deep-learning-with-knowledge-distillation">Meesho Tech Blog</a>.</div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="contents">
+  <div class="wrap">
+    <h2>Contents</h2>
+    <ol class="contents">
+      <li><div><a href="#search-at-meesho">Search at Meesho</a></div></li>
+      <li><div><a href="#2-background-two-model-xgboost-approach">2. Background: Two-Model XGBoost Approach</a></div></li>
+      <li><div><a href="#3-multi-task-learning-in-ranking">3. Multi-Task Learning in Ranking</a></div></li>
+      <li><div><a href="#4-model-training">4. Model Training</a></div></li>
+      <li><div><a href="#5-offline-and-online-results">5. Offline and Online Results</a></div></li>
+      <li><div><a href="#conclusion">Conclusion</a></div></li>
+      <li><div><a href="#references">References</a></div></li>
+    </ol>
+  </div>
+</section>
+
+<section class="article">
+<div class="wrap">
+<h2 id="search-at-meesho">Search at Meesho</h2>
+<p>For an e-commerce platform like Meesho, optimizing Search is pivotal to enhancing the user experience, improving product visibility and faster discovery, and eventually increasing conversion rates. Users search in multiple Indian languages looking for quality products at cheaper prices. Search at Meesho consists of four core components, each designed with specific objectives.  </p>
+<ul>
+<li>The Query Understanding layer interprets user intent by processing search queries to perform entity extraction, language normalization, spelling correction, synonym expansion, and intent classification.</li>
+<li>The Retrieval layer, retrieves a broad set of potentially relevant products from multiple candidate generators such as ElasticSearch and Embedding Based Retrieval.</li>
+<li>This initial set is then refined through a Multi-Stage Ranking framework.
+<ul>
+<li>The first layer or L1 ranker maximizes relevance and conversion rates at a global level, ensuring that the top-ranked products have broad appeal and relevance.</li>
+<li>Following this the L2 ranker optimizes for individual user conversion by aligning product relevance more closely with the unique preferences of the querying user.</li>
+</ul>
+</li>
+</ul>
+<figure><img src="images/fig1-search-flow.png" width="1600" height="524" alt="Overall search flow: query understanding, retrieval engine, multi-stage ranking and re-ranking."><figcaption><strong>Figure 1: Overall Search Flow</strong></figcaption></figure>
+<p>In this blog we talk about L1 ranker and its evolution from a dual XGBoost model architecture to a unified Multi-Task deep learning model that leverages knowledge distillation from a BERT-based Cross Encoder model. Our approach adopts entire space multi-task learning formulation with Customized Gate Control (CGC) networks, and query and catalog embeddings which are trained on text data generated using multimodal LLMs. The final model is efficiently deployed using Triton Inference Server, delivering improved ranking performance while maintaining high computational efficiency.</p>
+<h2 id="2-background-two-model-xgboost-approach">2. Background: Two-Model XGBoost Approach</h2>
+<p>L1 ranker acts as an aggregator layer receiving candidates from multiple generators and picks the top candidates, optimising for both relevance and conversion. In our current setup these objectives were treated as separate problems, leading to suboptimal joint optimisation. The baseline system employed two separate XGBoost models</p>
+<ul><li>CTR Model: Trained on impressions data to predict probability of click</li><li>CVR Model: Trained only on clicks data to predict probability of purchase</li></ul>
+<p>The final ranking is done using a combination of the above models. While this separation allowed for targeted modelling, it suffered from several limitations:</p>
+<ul><li><strong>Sample Selection Bias</strong>: CVR models trained only on clicked samples fail to capture the full user behaviour spectrum. They are trained on clicked impressions but are inferenced on the entire dataset, including non-clicked impressions. This inconsistency between training and inference samples leads to poor generalisation, as the model struggles to accurately predict unseen samples.</li><li><strong>Data sparsity</strong>: Conversion events are significantly rarer than clicks, leading to insufficient training signal</li><li><strong>Disjoint optimisation</strong>: relevance and conversion are optimized in isolation, leading to a disconnect between what gets a user to click and what drives them to convert.This overlooks potential synergies since the tasks are sequential (impressions → clicks → conversions).</li><li><strong>Feature duplication and maintenance overhead</strong> due to separate pipelines.</li><li>Adding unstructured data directly as a feature is a challenging task. For e.g. adding rich multi-modal (text and image) query and catalog embeddings and different variations instead of single dot product score.</li></ul>
+<h2 id="3-multi-task-learning-in-ranking">3. Multi-Task Learning in Ranking</h2>
+<p>To address the limitations of the two-model setup, we developed a unified multi-task model that jointly predicts CTR and CVR. The architecture consists of following main components:</p>
+<ul><li><strong>Feature Encoding and Interaction</strong>: Dense features including embeddings, are projected and fused via a Transformer encoder to capture high-order interactions.</li><li><strong>Multi-task Output with CGC Networks</strong>: Customized Gate Control networks enable flexible routing between shared and task-specific experts.</li><li><strong>BERT-based Knowledge Distillation</strong>: A pretrained cross encoder provides soft relevance supervision to preserve semantic alignment during training.</li><li><strong>Multi-objective Optimization with Entire Space Formulation</strong>: CTR and CTCVR are jointly learned over the full impression space, enabling robust CVR estimation and mitigating selection bias.</li></ul>
+<h3 id="31-architecture">3.1 Architecture</h3>
+<figure class="fig-narrow"><img src="images/fig2-multi-task-model.png" width="1548" height="1600" alt="Multi-task model architecture predicting CTR and CTCVR."><figcaption><strong>Figure 2: Multi-Task Model for predicting CTR and CTCVR</strong></figcaption></figure>
+<h2 id="32-feature-encoding-and-interaction">3.2 Feature Encoding and Interaction</h2>
+<h3 id="321-feature-engineering">3.2.1 Feature Engineering</h3>
+<p>Our model processes multiple numeric features along with sophisticated query-catalog embeddings. We developed multiple derived features which helped us to limit popularity bias and improve relevance on the platform, for e.g. we replaced query-catalog interaction features with query-category and query-price based features. E.g. users searching for a query “Saree” typically clicks or purchases in a specific price range compared to query “Panchi Saree”, which is usually higher priced. These features act as proxy relevance signals boosting filtering of irrelevant products and discovery of long tail products which lacked historical data.</p>
+<p>Each scalar feature is initially normalised and mapped to a high-dimensional embedding vector using linear layers followed by activation functions which are then mixed by the self-attention modules.</p>
+<h3 id="322-query-and-catalog-embeddings">3.2.2 Query and Catalog Embeddings</h3>
+<p>One of the key improvements in the deep learning based approach over XGBoost was the direct use of embeddings rather than single dot product score to capture relevance between query and catalog. These embeddings were trained during the retrieval stage where we first leveraged LLMs to extract visual attributes from images to get text in natural language form and generate rich summaries of multimodal content. This was then fine-tuned using a BERT encoder model with shared weights between query and catalog using contrastive setting.</p>
+<p>We added multiple embeddings capturing different aspects of query-catalog relationships</p>
+<ul><li><strong>Dot Product Similarity</strong>: captures overall semantic similarity, how well they align in the embedding space.</li><li><strong>Element-wise Difference</strong>: The subtraction operation captures the semantic distance or gap between what the user is searching for and what's being offered. This tells the model not just "how similar" but "in what ways" the query and product differ.</li><li><strong>Hadamard Product</strong>: Unlike the dot product which gives an overall similarity score, the Hadamard product preserves dimensional information about where query and product align. This allows the model to learn that certain types of semantic alignment are more important for different tasks.</li></ul>
+<h3 id="323-transformer-encoder-block-for-feature-interaction">3.2.3 Transformer Encoder Block for Feature Interaction</h3>
+<p>The processed features are fed into a transformer encoder to capture high-order interactions between features, where the [CLS] token is prepended and used as a global aggregator. The encoders modeled flexible pairwise interactions across all input features using self-attention. Transformers naturally handle a mix of dense and embedding features by treating each as a token, where multiple attention heads learn cross-modal interactions simultaneously. They also support attention masking, allowing the model to ignore missing tokens during training, which reduces noise and improves generalization, which was useful for our use case.</p>
+<h2 id="33-customized-gate-control-cgc-network-balancing-shared-and-specialized-learning">3.3 Customized Gate Control (CGC) Network: Balancing Shared and Specialized Learning</h2>
+<p>To support multi-task learning where tasks like CTR and CVR have overlapping but distinct optimization objectives, we evaluated several expert-sharing architectures: Shared Bottom, Multi-gate Mixture-of-Experts (MMoE), and Customized Gate Control (CGC). Shared bottom architectures suffer from task interference where conflicting gradients from different tasks can hurt overall performance. MMoE addresses this by introducing task-specific gates that select relevant experts, but all tasks share the same pool of experts, limiting task-specific specialization. Customized Gate Control (CGC) extends MMoE by introducing both shared experts (for common patterns) and task-specific experts (for specialized behaviors), with customized gates controlling access to both pools. The key advantage is that CGC can learn when to leverage shared representations versus when to rely on task-specific experts, reducing negative transfer while maintaining positive knowledge sharing.</p>
+<figure class="fig-narrow"><img src="images/fig3-cgc.png" width="1048" height="802" alt="Customized Gate Control model with task-specific and shared experts."><figcaption><strong>Figure 3: Customized Gate Control (CGC) Model</strong></figcaption></figure>
+<h2 id="34-knowledge-distillation">3.4 Knowledge Distillation</h2>
+<p>From the candidate generator layer, L1 receives a mix of relevant and irrelevant candidates where certain products (often popular products) tend to have high CTR and CVR rates regardless of their relevance to the specific query. In order to ensure the model balances both relevance and conversion objectives we trained a specialised teacher model focused purely on relevance assessment, then transferred this knowledge to our multi-task student model.</p>
+<p>The teacher model is a high-capacity BERT based cross-encoder designed for providing soft target scores that encode fine-grained semantic matching between user queries and e-commerce catalog listings. To address the inconsistency and noise in raw catalog data, we leveraged LLM to generate semantically rich summaries by distilling structured and multimodal product information—including titles, descriptions, and image captions—into clean, human-readable text. These summaries, combined with user queries, are jointly encoded using a transformer using focal loss with full cross-attention to capture deep inter-token relationships. For training we curated a balanced dataset of query–catalog pairs using historical user interaction data (add-to-carts, clicks, purchases) as positive signals and generated two types of negatives per query: random negatives, sampled from unrelated catalogs, and hard negatives, selected from the same subcategory as the positives but with low embedding similarity based on prior relevance models.</p>
+<figure><img src="images/fig4-cross-encoder.png" width="1600" height="1283" alt="Cross-encoder teacher model."><figcaption><strong>Figure 4: cross-encoder model as teacher</strong></figcaption></figure>
+<h2 id="4-model-training">4. Model Training</h2>
+<h3 id="41-loss-function">4.1 Loss Function</h3>
+<p>To address the data sparsity and selection bias in conversion modelling, we adopt the ESMM framework. Instead of modelling conversion (CVR) only on clicked data, it jointly models CTR and CTCVR (click-through × conversion) over the entire impression space. Given the impression x, the model predicts:</p>
+<ul><li>Post-view click-through rate, pCTR = p(Click = 1 | x)</li><li>Click-through conversion rate, pCTCVR = pCTR * p(Order = 1 | Click=1, x)</li></ul>
+<p>pCTCVR denotes the conditional probability of the product being purchased given that it has been viewed, which depicts complete user behaviour <em><strong>impression → click → purchase</strong></em>.</p>
+<p>The final loss is a linear combination of the losses of the individual tasks:</p>
+<div class="formula">Total loss = w1 * L_CTR + w2 * L_CTCVR + w1 * L_KD</div>
+<p>where,</p>
+<ul><li>L_CTR​ = Binary cross-entropy on CTR task.</li><li>L_CTCVR​ = Binary cross-entropy on CTCVR task.</li><li>L_KD​ = KL divergence with teacher model</li><li>w_k = Task specific weights</li></ul>
+<h2 id="42-other-key-features">4.2 Other Key Features</h2>
+<ul><li><strong>Training data: </strong>We sampled our data ensuring query diversity across head, torso and tail, removing outlier sessions and restricting frequently occurring query-catalog pairs. The data was collected over a larger time frame which allowed better generalisation.</li><li><strong>Position bias: </strong>can mislead the model by attributing higher relevance to top-ranked products purely due to their placement, not their actual quality. To mitigate this, we introduce a position side tower whose output is added to the main tower’s logits during training. At inference time, we drop the position tower output, ensuring the final ranking reflects true relevance rather than positional influence.</li><li><strong>Distributed training with DDP:</strong> We trained the model using PyTorch DDP with mixed precision using iterable DataLoader for large-scale efficiency, optimized with AdamW and a cosine scheduler with warm-up.</li></ul>
+<h2 id="5-offline-and-online-results">5. Offline and Online Results</h2>
+<p>Our evaluation framework includes both offline metrics and online A/B testing. In offline setup we evaluate two key areas:</p>
+<ul><li>Ranking metrics like Precision@k, nDCG@k, MRR for clicks and orders - helps to measure whether the model surfaces higher-quality, more engaging products at the top of the list.</li><li>Feed distribution metrics - helps to analyze the diversity and fairness of the top-K recommendations—evaluating average product rating, catalog diversity (unique product count), price, quality (bad rating count) and bias toward specific candidate generators (e.g., ElasticSearch vs. EBR).</li></ul>
+<p>In offline tests using historical session data, our model showed a 1.66% uplift in click precision@10 and 1.02% in order precision@10 over the baseline XGBoost model. Compared to a variant without knowledge distillation, we observed an improvement of 13% in click precision, affirming its value in preserving semantic relevance. In A/B testing model delivered significant improvement in CTR and click MRR over baseline.</p>
+<p>We qualitatively analyzed the output for a few queries by comparing the final ranked feeds of the two models: XGBoost (top) vs. Multi-task model (bottom).</p>
+</div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“boot heel”</dd></div>
+<div><dt>Category</dt><dd>Women and Men Footwear</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/boot-heel-xgboost.jpg" width="900" height="1151" loading="lazy" alt="XGBoost results for “boot heel”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/boot-heel-multitask.jpg" width="900" height="1140" loading="lazy" alt="Multi-task model results for “boot heel”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“rucksack bag for women”</dd></div>
+<div><dt>Category</dt><dd>Travel Accessories</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/rucksack-xgboost.jpg" width="900" height="1151" loading="lazy" alt="XGBoost results for “rucksack bag for women”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/rucksack-multitask.jpg" width="900" height="1152" loading="lazy" alt="Multi-task model results for “rucksack bag for women”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“earring bird”</dd></div>
+<div><dt>Category</dt><dd>Women Jewellery</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/earring-xgboost.jpg" width="900" height="1162" loading="lazy" alt="XGBoost results for “earring bird”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/earring-multitask.jpg" width="900" height="1126" loading="lazy" alt="Multi-task model results for “earring bird”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“bottle speaker”</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/speaker-xgboost.jpg" width="900" height="1136" loading="lazy" alt="XGBoost results for “bottle speaker”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/speaker-multitask.jpg" width="900" height="1143" loading="lazy" alt="Multi-task model results for “bottle speaker”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“polo tshirt black”</dd></div>
+<div><dt>Category</dt><dd>Men Fashion</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/polo-xgboost.jpg" width="900" height="1149" loading="lazy" alt="XGBoost results for “polo tshirt black”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/polo-multitask.jpg" width="900" height="1137" loading="lazy" alt="Multi-task model results for “polo tshirt black”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“carrom bod”</dd></div>
+<div><dt>Note</dt><dd>spelling mistake</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/carrom-xgboost.jpg" width="900" height="1152" loading="lazy" alt="XGBoost results for “carrom bod”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/carrom-multitask.jpg" width="900" height="1092" loading="lazy" alt="Multi-task model results for “carrom bod”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"></div>
+<div class="compares"><div class="compare">
+  <dl class="query-bar"><div><dt>Query</dt><dd class="q">“lavender skirt long”</dd></div>
+<div><dt>Category</dt><dd>Women Western Wear</dd></div>
+</dl>
+  <div class="pair">
+    <figure><span class="model">XGBoost</span><img src="images/skirt-xgboost.jpg" width="900" height="1156" loading="lazy" alt="XGBoost results for “lavender skirt long”"></figure>
+    <figure class="after"><span class="model">Multi-task model</span><img src="images/skirt-multitask.jpg" width="900" height="1156" loading="lazy" alt="Multi-task model results for “lavender skirt long”"></figure>
+  </div>
+</div>
+</div>
+<div class="wrap"><h2 id="conclusion">Conclusion</h2>
+<p>This work presents a unified deep learning framework that aligns semantic relevance with conversion objectives through multi-task learning, transformer-based feature interaction, and guided supervision via knowledge distillation. By overcoming the constraints of traditional dual-model setups, we build a more flexible and signal-rich L1 ranker. The integration of CGC for expert disentanglement, attention masking for handling sparsity, and efficient deployment via Triton enables better model performance and production-ready scalability. </p>
+<h2 id="references">References</h2>
+<ul><li><a href="https://arxiv.org/pdf/1804.07931">Entire Space Multi-Task Model</a></li><li><a href="https://dl.acm.org/doi/pdf/10.1145/3383313.3412236">Customized Gated Control</a></li></ul>
+</div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Originally published on the <a href="https://www.meesho.io/blog/evolving-search-ranking-from-xgboost-to-multi-task-deep-learning-with-knowledge-distillation">Meesho Tech Blog</a>, August 2025.</p>
+    <p><a href="../">← All posts</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
