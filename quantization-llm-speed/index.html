@@ -186,6 +186,9 @@ tr.total td { font-weight: 700; background: color-mix(in srgb, var(--paper) 60%,
 .checklist li { padding: 12px 0; border-top: 1px solid var(--rule); margin: 0; }
 
 footer { border-top: 1px solid var(--rule); padding: 36px 0 56px; font-family: var(--sans); font-size: 14.5px; color: var(--muted); }
+footer a { font-weight: 600; }
+.back { font-family: var(--sans); font-size: 15px; font-weight: 600; color: var(--muted); text-decoration: none; display: inline-block; margin-bottom: 28px; }
+.back:hover { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -207,6 +210,7 @@ footer { border-top: 1px solid var(--rule); padding: 36px 0 56px; font-family: v
 <header class="hero" id="top">
   <div class="wide">
     <div>
+      <a class="back" href="../">← All posts</a>
       <div class="eyebrow">FP8 on an H100, worked out from first principles</div>
       <h1>Does quantization make LLMs faster?</h1>
       <p class="dek">Yes, but for two different reasons. FP8 halves the bytes a model moves and doubles the rate at which a GPU can do the math. Each phase of inference benefits from only one of them.</p>
@@ -706,6 +710,7 @@ FP8    0.78 ms + 127 × 0.52 ms  ≈ <b>67 ms</b></div>
 <footer>
   <div class="wrap">
     <strong>Does quantization make LLMs faster?</strong> A first-principles analysis of FP8 inference on an H100, using Qwen2.5-1.5B. All figures are idealized roofline estimates, not measured benchmarks.
+    <p><a href="../">← All posts</a></p>
   </div>
 </footer>
 
